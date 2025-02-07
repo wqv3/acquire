@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.IO;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 class Program
 {
@@ -52,6 +53,10 @@ class Program
         var entries = harData["log"]["entries"];
         int index = 1;
 
+        // attach
+        var morphmeData = new JObject();
+        var requestsArray = new JArray();
+
         foreach (var entry in entries)
         {
             string url = entry["request"]["url"].ToString();
@@ -60,8 +65,8 @@ class Program
             long size = (long)entry["response"]["bodySize"];
 
             string folderName = status == "200"
-                ? $"[{method}] [{status}] request_{index} = {size} bytes"
-                : $"[{method}] request_{index} = {size} bytes";
+                ? $"[{method}] [{status}] request_{index}"
+                : $"[{method}] request_{index}";
 
             string folderPath = Path.Combine(outputDir, folderName);
 
@@ -81,8 +86,23 @@ class Program
 
             Console.WriteLine($"acquired request {index}: {method} {url}, status: {status}, size: {size} bytes");
 
+            // jsoning
+            var requestObject = new JObject();
+            requestObject[$"request_{index}"] = new JObject
+            {
+                { "url-to-morph", url },
+                { "headers-to-morph", FormatHeadersAsObject(entry["request"]["headers"]) }
+            };
+
+            requestsArray.Add(requestObject);
+
             index++;
         }
+
+        // morphing
+        morphmeData["requests"] = requestsArray;
+        string jsonFilePath = Path.Combine(outputDir, $"{fileName}.json");
+        File.WriteAllText(jsonFilePath, morphmeData.ToString(Formatting.Indented));
 
         Console.WriteLine($"acquiring of {fileName} completed.");
         Console.WriteLine("probably done!");
@@ -96,5 +116,15 @@ class Program
             result += $"{header["name"]}: {header["value"]}\n";
         }
         return result;
+    }
+
+    static JObject FormatHeadersAsObject(JToken headers)
+    {
+        JObject headersObject = new JObject();
+        foreach (var header in headers)
+        {
+            headersObject[header["name"].ToString()] = header["value"].ToString();
+        }
+        return headersObject;
     }
 }
